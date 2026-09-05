@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FAKE CASH SLOTS — Play Money Only</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="stage">
+    <div class="bloom" aria-hidden="true"></div>
+    <div class="floor-glow" aria-hidden="true"></div>
+
+    <header class="top-banner">
+      <div class="neon-sign">
+        <h1 class="title">
+          <span class="title-line gold" data-text="FAKE CASH">FAKE CASH</span>
+          <span class="title-line pink" data-text="SLOTS">SLOTS</span>
+        </h1>
+        <div class="neon-underline"></div>
+      </div>
+      <p class="disclaimer" role="note">★ PLAY MONEY ONLY — NO REAL CASH · NO REAL PRIZES ★</p>
+    </header>
+
+    <div class="cabinet attract" id="cabinet">
+      <div class="cabinet-rim" aria-hidden="true"></div>
+
+      <div class="chrome-rail top">
+        <div class="chrome-face"></div>
+        <div class="led-row" id="led-top"></div>
+      </div>
+
+      <div class="glass-panel marquee-panel">
+        <div class="marquee-inner">
+          <div class="marquee-bulbs left" aria-hidden="true"></div>
+          <div class="marquee-display" id="marquee">TRY YOUR LUCK</div>
+          <div class="marquee-bulbs right" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <div class="glass-panel reel-cabinet">
+        <div class="chrome-bezel">
+          <div class="bezel-shine"></div>
+          <div class="reels-window">
+            <div class="payline-bar" aria-hidden="true">
+              <span class="payline-tip left"></span>
+              <span class="payline-core"></span>
+              <span class="payline-tip right"></span>
+            </div>
+            <div class="reels" id="reels">
+              <div class="reel-column">
+                <div class="reel-chrome-cap"></div>
+                <div class="reel-frame">
+                  <canvas class="reel-canvas" id="reel-0" width="200" height="300" aria-label="Reel 1"></canvas>
+                  <div class="reel-glass"></div>
+                </div>
+                <div class="reel-chrome-cap bottom"></div>
+              </div>
+              <div class="reel-column">
+                <div class="reel-chrome-cap"></div>
+                <div class="reel-frame">
+                  <canvas class="reel-canvas" id="reel-1" width="200" height="300" aria-label="Reel 2"></canvas>
+                  <div class="reel-glass"></div>
+                </div>
+                <div class="reel-chrome-cap bottom"></div>
+              </div>
+              <div class="reel-column">
+                <div class="reel-chrome-cap"></div>
+                <div class="reel-frame">
+                  <canvas class="reel-canvas" id="reel-2" width="200" height="300" aria-label="Reel 3"></canvas>
+                  <div class="reel-glass"></div>
+                </div>
+                <div class="reel-chrome-cap bottom"></div>
+              </div>
+            </div>
+            <div class="win-light-frame" id="win-lights" aria-hidden="true"></div>
+          </div>
+        </div>
+
+        <div class="message-board">
+          <div class="message" id="message" role="status" aria-live="polite">INSERT PLAY CREDITS &amp; SPIN</div>
+        </div>
+      </div>
+
+      <div class="control-deck">
+        <div class="meter balance-meter">
+          <div class="meter-label">CREDITS</div>
+          <div class="meter-value" id="balance">$1,000</div>
+          <div class="meter-glow"></div>
+        </div>
+
+        <div class="bet-deck">
+          <div class="meter-label">BET</div>
+          <div class="bet-buttons" id="bet-buttons" role="group" aria-label="Bet size">
+            <button type="button" class="bet-btn" data-bet="5">5</button>
+            <button type="button" class="bet-btn active" data-bet="10">10</button>
+            <button type="button" class="bet-btn" data-bet="25">25</button>
+            <button type="button" class="bet-btn" data-bet="50">50</button>
+            <button type="button" class="bet-btn" data-bet="100">100</button>
+          </div>
+        </div>
+
+        <button type="button" class="spin-btn" id="spin-btn" aria-label="Spin reels">
+          <span class="spin-ring"></span>
+          <span class="spin-core"><span class="spin-text">SPIN</span></span>
+        </button>
+
+        <div class="meter win-meter">
+          <div class="meter-label">WIN</div>
+          <div class="meter-value" id="last-win">$0</div>
+          <div class="meter-glow cyan"></div>
+        </div>
+      </div>
+
+      <div class="paytable-strip">
+        <div class="paytable-header">
+          <span class="pt-title">PAYTABLE</span>
+          <span class="pt-sub">3 OF A KIND · CENTER LINE · PLAY MONEY</span>
+        </div>
+        <ul class="pay-list" id="paytable"></ul>
+      </div>
+
+      <div class="service-row">
+        <button type="button" class="service-btn" id="add-btn">+ $500 PLAY MONEY</button>
+        <button type="button" class="service-btn gold" id="reset-btn">RESET TO $1,000</button>
+      </div>
+
+      <div class="chrome-rail bottom">
+        <div class="chrome-face"></div>
+        <div class="led-row reverse" id="led-bottom"></div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Fictional play money only. No deposits, withdrawals, crypto, or real gambling.</p>
+    </footer>
+  </div>
+
+  <canvas id="confetti" aria-hidden="true"></canvas>
+  <script src="game.js"></script>
+</body>
+</html>
