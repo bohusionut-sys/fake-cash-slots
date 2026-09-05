@@ -32,8 +32,8 @@
           <div class="marquee-face">
             <div class="marquee-bulbs left" aria-hidden="true"></div>
             <div class="marquee-title">
-              <span class="mt-line gold">FAKE CASH</span>
-              <span class="mt-line cream">SLOTS</span>
+              <span class="mt-line gold" data-text="FAKE CASH">FAKE CASH</span>
+              <span class="mt-line cream" data-text="SLOTS">SLOTS</span>
             </div>
             <div class="marquee-bulbs right" aria-hidden="true"></div>
           </div>
@@ -42,9 +42,17 @@
         <div class="topper-lip" aria-hidden="true"></div>
       </div>
 
-      <!-- 2. Belly glass art panel (above reels — classic upright art) -->
+      <!-- 2. Belly glass art panel (printed poster under varnish) -->
       <div class="art-panel">
+        <div class="art-band-bevel" aria-hidden="true"></div>
         <div class="art-print">
+          <div class="art-sheen" aria-hidden="true"></div>
+          <div class="art-wear" aria-hidden="true"></div>
+          <div class="art-illustration" aria-hidden="true">
+            <span class="art-suit">♠</span>
+            <span class="art-reels-deco">◉ ◉ ◉</span>
+            <span class="art-suit">♥</span>
+          </div>
           <div class="art-ornament">★ ★ ★</div>
           <div class="art-headline">THREE OF A KIND</div>
           <div class="art-sub">CENTER LINE PAYS · PLAY MONEY ONLY</div>
@@ -61,6 +69,7 @@
           <div class="bezel-bolt br" aria-hidden="true"></div>
           <div class="bezel-inner">
             <div class="glass-window">
+              <div class="glass-smoke" aria-hidden="true"></div>
               <div class="glass-glare" aria-hidden="true"></div>
               <div class="payline-bar" aria-hidden="true">
                 <span class="payline-tip left"></span>
@@ -99,6 +108,7 @@
       <!-- 4. Button deck (angled control shelf) -->
       <div class="control-shelf">
         <div class="shelf-bevel" aria-hidden="true"></div>
+        <div class="shelf-plastic-lip" aria-hidden="true"></div>
         <div class="shelf-face">
           <div class="led-meter credits-meter">
             <div class="led-label">CREDITS</div>
@@ -128,21 +138,23 @@
         </div>
       </div>
 
-      <!-- Paytable as printed sticker / drawer -->
+      <div class="service-row">
+        <button type="button" class="service-btn" id="add-btn">+ $500 PLAY</button>
+        <button type="button" class="service-btn reset" id="reset-btn">RESET $1000</button>
+      </div>
+
+      <!-- Paytable as pull-out belly sticker (not a deck button) -->
       <div class="pays-drawer">
-        <button type="button" class="pays-tab" id="pays-tab" aria-expanded="false" aria-controls="pays-panel">
-          PAYTABLE · 3 OF A KIND
+        <button type="button" class="pays-tab" id="pays-tab" aria-expanded="false" aria-controls="pays-panel" title="Pull pay sticker">
+          <span class="pays-tab-edge" aria-hidden="true"></span>
+          <span class="pays-tab-label">PAYS</span>
+          <span class="pays-tab-chevron" aria-hidden="true">▾</span>
         </button>
         <div class="pays-panel" id="pays-panel" hidden>
           <div class="sticker-header">PLAY MONEY PAYS</div>
           <ul class="pay-list" id="paytable"></ul>
           <p class="sticker-note">★ PLAY MONEY ONLY — NO REAL CASH · NO REAL PRIZES ★</p>
         </div>
-      </div>
-
-      <div class="service-row">
-        <button type="button" class="service-btn" id="add-btn">+ $500 PLAY</button>
-        <button type="button" class="service-btn reset" id="reset-btn">RESET $1000</button>
       </div>
 
       <!-- 5. Coin tray -->
