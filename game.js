@@ -9,9 +9,11 @@
   const BETS = [5, 10, 25, 50, 100];
   const SYMBOL_H = 100;
   const VISIBLE = 3;
-  const STAGGER_MS = 150;
+  const STAGGER_MS = 280;
   const HOLD_AFTER_STOP_MS = 420;
-  const MAX_PARTICLES = 90;
+  const MAX_PARTICLES = 110;
+  /** Demo-friendly 3-of-a-kind rate (~30%). Toggle with ?demoWins=0 or localStorage fakeCashSlots.demoWins=0 */
+  const DEMO_WIN_RATE = 0.30;
 
   /** @type {{id:string,emoji:string,name:string,mult:number,tier:string,color:string}[]} */
   const SYMBOLS = [
@@ -214,7 +216,10 @@
     els.balance.textContent = formatLed(balance);
     els.lastWin.textContent = formatLed(lastWin);
     updateBetButtons();
-    els.spinBtn.disabled = spinning || balance < bet;
+    // Leave SPIN lit during spin (no slam-stop / no dim); only disable when broke
+    els.spinBtn.disabled = !spinning && balance < bet;
+    els.spinBtn.classList.toggle("is-spinning", spinning);
+    els.spinBtn.setAttribute("aria-busy", spinning ? "true" : "false");
   }
 
   function updateBetButtons() {
@@ -237,8 +242,37 @@
 
   const POOL = buildWeightedPool();
 
+  function demoWinsEnabled() {
+    try {
+      const q = new URLSearchParams(location.search).get("demoWins");
+      if (q === "0" || q === "false") return false;
+      if (q === "1" || q === "true") return true;
+      const ls = localStorage.getItem("fakeCashSlots.demoWins");
+      if (ls === "0" || ls === "false") return false;
+    } catch (_) { /* ignore */ }
+    return true; // casual play-money default: slightly juicy
+  }
+
   function randomSymbolIndex() {
     return POOL[Math.floor(Math.random() * POOL.length)];
+  }
+
+  /** Pick center-line results; ~DEMO_WIN_RATE chance of 3-of-a-kind when demo wins on */
+  function pickSpinResults() {
+    if (demoWinsEnabled() && Math.random() < DEMO_WIN_RATE) {
+      const idx = randomSymbolIndex();
+      return [idx, idx, idx];
+    }
+    let results = [randomSymbolIndex(), randomSymbolIndex(), randomSymbolIndex()];
+    // If we accidentally hit 3oak outside the demo roll, keep it (still a win)
+    if (!demoWinsEnabled() && results[0] === results[1] && results[1] === results[2]) {
+      // rare natural — fine
+    }
+    // When demo is on but we didn't force a win, avoid accidental 3oak to keep rate near target
+    if (demoWinsEnabled() && results[0] === results[1] && results[1] === results[2]) {
+      results[2] = (results[2] + 1 + Math.floor(Math.random() * (SYMBOLS.length - 1))) % SYMBOLS.length;
+    }
+    return results;
   }
 
   function buildStrip() {
@@ -490,14 +524,48 @@
     const totalH = len * cellH;
     let off = ((reel.offset % totalH) + totalH) % totalH;
 
-    const blurPasses = reel.blur > 0.3 ? 4 : reel.blur > 0.1 ? 2 : 1;
+    // Independent COLUMN motion blur — vertical smear on this reel only
+    const b = reel.blur || 0;
+    let blurPasses = 1;
+    if (b > 0.55) blurPasses = 7;
+    else if (b > 0.3) blurPasses = 5;
+    else if (b > 0.12) blurPasses = 3;
+    else if (b > 0.04) blurPasses = 2;
+
     for (let pass = blurPasses - 1; pass >= 0; pass--) {
-      const alpha = pass === 0 ? 1 : 0.18 / pass;
-      const yShift = pass * cellH * 0.14 * reel.blur;
+      const tPass = blurPasses === 1 ? 0 : pass / (blurPasses - 1);
+      const alpha = pass === 0 ? 1 : (0.22 / blurPasses) * (1 - tPass * 0.35);
+      // Stretch smear along spin axis (downward trail)
+      const yShift = pass * cellH * (0.10 + b * 0.16) * b;
       ctx.globalAlpha = alpha;
       drawStripAt(ctx, strip, cellH, cellW, off + yShift, highlight && pass === 0);
     }
     ctx.globalAlpha = 1;
+
+    // Extra vertical streak overlay while this column is blurred (per-drum, not whole window)
+    if (b > 0.2) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.35, b * 0.28);
+      const streak = ctx.createLinearGradient(0, 0, 0, H);
+      streak.addColorStop(0, "rgba(255,255,255,0)");
+      streak.addColorStop(0.5, "rgba(220,200,160,0.12)");
+      streak.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = streak;
+      // thin column-center streaks
+      const sw = Math.max(2, W * 0.04);
+      for (let s = 0; s < 3; s++) {
+        const sx = W * (0.25 + s * 0.25) - sw / 2;
+        ctx.fillRect(sx, 0, sw, H);
+      }
+      ctx.restore();
+    }
+
+    // Toggle CSS column-blur class on the drum (independent strips)
+    const drum = canvases[reelIndex].closest(".reel-drum");
+    if (drum) {
+      drum.classList.toggle("column-blur", b > 0.15);
+      drum.classList.toggle("column-blur-hard", b > 0.55);
+    }
 
     // Top/bottom vignette inside drum window
     const vig = ctx.createLinearGradient(0, 0, 0, H);
@@ -549,12 +617,15 @@
     updateMeters();
     stopAttract();
     els.cabinet.classList.remove("attract", "winning");
-    document.querySelectorAll(".reel-drum").forEach((f) => f.classList.remove("winner"));
+    els.cabinet.classList.add("spinning");
+    document.querySelectorAll(".reel-drum").forEach((f) => {
+      f.classList.remove("winner", "win-pulse");
+    });
     setMessage("SPINNING…", "spinning");
     setMarquee("GOOD LUCK", "cyan");
     startWhir();
 
-    const results = [randomSymbolIndex(), randomSymbolIndex(), randomSymbolIndex()];
+    const results = pickSpinResults();
 
     reels.forEach((reel, i) => {
       const strip = buildStrip();
@@ -566,14 +637,15 @@
 
       const cellH = canvases[i].height / VISIBLE;
       const landOffset = (centerPos - 1) * cellH;
-      const spins = 6 + i * 2;
+      // Clear L→R stagger: more spins + longer duration per column
+      const spins = 5 + i * 3;
       const startNorm = ((reel.offset % (strip.length * cellH)) + strip.length * cellH) % (strip.length * cellH);
       const distance = spins * strip.length * cellH + ((landOffset - startNorm + strip.length * cellH) % (strip.length * cellH));
       const overshoot = cellH * 0.035;
 
       reel.phase = "spinning";
       reel.startTime = performance.now() + i * STAGGER_MS;
-      reel.duration = 1500 + i * STAGGER_MS * 2.2;
+      reel.duration = 1200 + i * (STAGGER_MS * 2.8 + 180);
       reel.startOffset = reel.offset;
       reel.target = reel.offset + distance;
       reel.landOffset = landOffset;
@@ -632,6 +704,8 @@
         const cellH = canvases[i].height / VISIBLE;
         reel.offset = (reel.landIndex - 1) * cellH;
         playSfx("clack");
+        const drum = canvases[i].closest(".reel-drum");
+        if (drum) drum.classList.remove("column-blur", "column-blur-hard");
         drawReel(i, false);
 
         if (i === 2) {
@@ -650,6 +724,7 @@
   function finishSpin() {
     const results = reels.map((r) => r.resultIndex);
     results.forEach((_, i) => drawReel(i, false));
+    els.cabinet.classList.remove("spinning");
 
     const [a, b, c] = results;
     if (a === b && b === c) {
@@ -657,7 +732,9 @@
       const payout = bet * sym.mult;
       lastWin = payout;
       els.cabinet.classList.add("winning");
-      document.querySelectorAll(".reel-drum").forEach((f) => f.classList.add("winner"));
+      document.querySelectorAll(".reel-drum").forEach((f) => {
+        f.classList.add("winner", "win-pulse");
+      });
       results.forEach((_, i) => drawReel(i, true));
 
       setMarquee("★ WINNER ★", "win");
@@ -667,22 +744,25 @@
       if (isBig) playSfx("bigwin");
       else playSfx("win");
 
-      // Coin burst toward WIN meter
-      burstTowardWinMeter(isBig ? 70 : 45, sym.color);
-      // Toast only for mid/big; tiny toast for small
+      // Stronger coin flick toward WIN LED (small wins still juicy)
+      burstTowardWinMeter(isBig ? 80 : 56, sym.color);
       showWinToast(payout, sym, isBig);
 
-      countUpWin(payout, () => {
-        balance += payout;
+      // Credit count-up on WIN meter + CREDITS meter
+      const balBefore = balance;
+      countUpWin(payout, balBefore, () => {
+        balance = balBefore + payout;
         saveBalance();
         updateMeters();
         spinning = false;
         updateMeters();
         setTimeout(() => {
           els.cabinet.classList.remove("winning");
-          document.querySelectorAll(".reel-drum").forEach((f) => f.classList.remove("winner"));
+          document.querySelectorAll(".reel-drum").forEach((f) => {
+            f.classList.remove("winner", "win-pulse");
+          });
           startAttract();
-        }, 1400);
+        }, 1600);
       });
     } else {
       playSfx("lose");
@@ -696,18 +776,24 @@
     }
   }
 
-  function countUpWin(total, done) {
+  function countUpWin(total, balBefore, done) {
     const start = performance.now();
-    const dur = Math.min(900, 400 + total * 2);
+    const dur = Math.min(1100, 480 + total * 2.2);
+    els.balance.classList.add("counting");
+    els.lastWin.classList.add("counting");
     function step(now) {
       const t = Math.min(1, (now - start) / dur);
       const eased = easeOutCubic(t);
       const val = Math.floor(total * eased);
       els.lastWin.textContent = formatLed(val);
+      els.balance.textContent = formatLed(balBefore + val);
       setMessage(`YOU WON ${formatMoney(val)} PLAY MONEY!`, "win");
       if (t < 1) requestAnimationFrame(step);
       else {
         els.lastWin.textContent = formatLed(total);
+        els.balance.textContent = formatLed(balBefore + total);
+        els.balance.classList.remove("counting");
+        els.lastWin.classList.remove("counting");
         done();
       }
     }
@@ -775,14 +861,14 @@
       const dx = tx - from.x;
       const dy = ty - from.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const speed = 4 + Math.random() * 7;
+      const speed = 5.5 + Math.random() * 8;
       particles.push({
-        x: from.x + (Math.random() - 0.5) * 50,
-        y: from.y + (Math.random() - 0.5) * 30,
-        vx: (dx / dist) * speed * (0.7 + Math.random() * 0.5) + (Math.random() - 0.5) * 2,
-        vy: (dy / dist) * speed * (0.7 + Math.random() * 0.5) - Math.random() * 2,
+        x: from.x + (Math.random() - 0.5) * 60,
+        y: from.y + (Math.random() - 0.5) * 36,
+        vx: (dx / dist) * speed * (0.85 + Math.random() * 0.45) + (Math.random() - 0.5) * 1.6,
+        vy: (dy / dist) * speed * (0.85 + Math.random() * 0.45) - Math.random() * 1.5,
         life: 1,
-        decay: 0.01 + Math.random() * 0.012,
+        decay: 0.008 + Math.random() * 0.01,
         color: colors[i % colors.length],
         size: 3 + Math.random() * 5,
         rot: Math.random() * Math.PI,
@@ -810,9 +896,9 @@
         continue;
       }
       // Soft homing toward WIN meter early in life
-      if (p.life > 0.45 && p.targetX != null) {
-        p.vx += (p.targetX - p.x) * 0.008;
-        p.vy += (p.targetY - p.y) * 0.008;
+      if (p.life > 0.35 && p.targetX != null) {
+        p.vx += (p.targetX - p.x) * 0.014;
+        p.vy += (p.targetY - p.y) * 0.014;
       }
       p.x += p.vx;
       p.y += p.vy;
@@ -885,15 +971,18 @@
     for (let i = 0; i < 14; i++) {
       const d = document.createElement("div");
       d.className = "candle";
-      d.style.animationDelay = `${(i * 0.12).toFixed(2)}s`;
+      d.style.setProperty("--i", String(i));
+      d.style.animationDelay = `${(i * 0.09).toFixed(2)}s`;
       els.candleBar.appendChild(d);
     }
-    document.querySelectorAll(".marquee-bulbs").forEach((col) => {
+    document.querySelectorAll(".marquee-bulbs").forEach((col, colIdx) => {
       col.innerHTML = "";
       for (let i = 0; i < 5; i++) {
         const b = document.createElement("span");
         b.className = "bulb";
-        b.style.animationDelay = `${(i * 0.2).toFixed(2)}s`;
+        const idx = colIdx * 5 + i;
+        b.style.setProperty("--i", String(idx));
+        b.style.animationDelay = `${(idx * 0.11).toFixed(2)}s`;
         col.appendChild(b);
       }
     });
