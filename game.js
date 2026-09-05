@@ -11,7 +11,8 @@
   const VISIBLE = 3;
   const STAGGER_MS = 280;
   const HOLD_AFTER_STOP_MS = 420;
-  const MAX_PARTICLES = 110;
+  const WIN_POP_MS = 400;
+  const MAX_PARTICLES = 48;
   /** Demo-friendly 3-of-a-kind rate (~30%). Toggle with ?demoWins=0 or localStorage fakeCashSlots.demoWins=0 */
   const DEMO_WIN_RATE = 0.30;
 
@@ -327,10 +328,12 @@
   }
 
   /** Painted cardboard / enamel tile on a mechanical reel */
-  function drawMechTile(ctx, x, y, w, h, sym, glow) {
+  function drawMechTile(ctx, x, y, w, h, sym, glow, dim, popScale) {
     const pad = Math.max(3, w * 0.04);
     const r = Math.min(8, w * 0.06);
+    const pop = popScale || 1;
     ctx.save();
+    if (dim) ctx.globalAlpha = 0.42;
 
     // Cream / aged card stock behind symbols (classic mechanical)
     const bg = ctx.createLinearGradient(x, y, x, y + h);
@@ -367,17 +370,26 @@
 
     const cx = x + w / 2;
     const cy = y + h / 2;
-    // Larger in-cell symbols
-    const heroScale = sym.tier === "high" ? 0.72 : sym.tier === "mid" ? 0.62 : 0.58;
 
+    if (glow && pop > 1.01) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(pop, pop);
+      ctx.translate(-cx, -cy);
+    }
+
+    // Base glyph size (outer ctx.scale applies win pop)
+    const baseHero = sym.tier === "high" ? 0.72 : sym.tier === "mid" ? 0.62 : 0.58;
     if (sym.id === "seven") {
-      drawPaintedSeven(ctx, cx, cy, Math.min(w, h) * heroScale, glow);
+      drawPaintedSeven(ctx, cx, cy, Math.min(w, h) * baseHero, glow);
     } else if (sym.id === "bar") {
       drawPaintedBar(ctx, cx, cy, w * 0.72, glow);
     } else if (sym.id === "diamond") {
-      drawPaintedDiamond(ctx, cx, cy, Math.min(w, h) * 0.38, glow);
+      // Extra radius nudge so diamonds feel like they "pop"
+      const dR = Math.min(w, h) * (0.38 + (glow ? 0.04 : 0));
+      drawPaintedDiamond(ctx, cx, cy, dR, glow, pop);
     } else {
-      const size = Math.floor(h * heroScale);
+      const size = Math.floor(h * baseHero);
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       // Drop shadow for physical print depth
@@ -394,6 +406,8 @@
       ctx.fillStyle = "#fff";
       ctx.fillText(sym.emoji, cx, cy);
     }
+
+    if (glow && pop > 1.01) ctx.restore();
     ctx.restore();
   }
 
@@ -459,8 +473,9 @@
     ctx.restore();
   }
 
-  function drawPaintedDiamond(ctx, cx, cy, r, glow) {
+  function drawPaintedDiamond(ctx, cx, cy, r, glow, pop) {
     ctx.save();
+    const p = pop || 1;
     // Shadow
     ctx.beginPath();
     ctx.moveTo(cx + 2, cy - r + 3);
@@ -473,7 +488,7 @@
 
     if (glow) {
       ctx.shadowColor = "#5eead4";
-      ctx.shadowBlur = 30;
+      ctx.shadowBlur = 30 + (p - 1) * 40;
     }
     ctx.beginPath();
     ctx.moveTo(cx, cy - r);
@@ -493,19 +508,31 @@
     ctx.strokeStyle = "rgba(255,255,255,0.75)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
-    // Facet highlight
+    // Facet highlight — brighter on pop
     ctx.beginPath();
     ctx.moveTo(cx, cy - r);
     ctx.lineTo(cx + r * 0.22, cy - r * 0.12);
     ctx.lineTo(cx, cy + r * 0.08);
     ctx.lineTo(cx - r * 0.22, cy - r * 0.12);
     ctx.closePath();
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    ctx.fillStyle = glow ? `rgba(255,255,255,${Math.min(0.85, 0.5 + (p - 1) * 1.2)})` : "rgba(255,255,255,0.5)";
     ctx.fill();
+    // Specular sparkle burst when popping
+    if (glow && p > 1.04) {
+      ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.9, (p - 1) * 3)})`;
+      ctx.lineWidth = 1.2;
+      const spark = r * (0.55 + (p - 1) * 1.4);
+      ctx.beginPath();
+      ctx.moveTo(cx - spark, cy);
+      ctx.lineTo(cx + spark, cy);
+      ctx.moveTo(cx, cy - spark);
+      ctx.lineTo(cx, cy + spark);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
-  function drawReel(reelIndex, highlight) {
+  function drawReel(reelIndex, highlight, popScale) {
     const canvas = canvases[reelIndex];
     const ctx = ctxs[reelIndex];
     const reel = reels[reelIndex];
@@ -513,6 +540,7 @@
     const H = canvas.height;
     const cellH = H / VISIBLE;
     const cellW = W;
+    const pop = popScale || 1;
 
     ctx.clearRect(0, 0, W, H);
     // Dark felt / velvet behind drums
@@ -538,7 +566,7 @@
       // Stretch smear along spin axis (downward trail)
       const yShift = pass * cellH * (0.10 + b * 0.16) * b;
       ctx.globalAlpha = alpha;
-      drawStripAt(ctx, strip, cellH, cellW, off + yShift, highlight && pass === 0);
+      drawStripAt(ctx, strip, cellH, cellW, off + yShift, highlight && pass === 0, pop);
     }
     ctx.globalAlpha = 1;
 
@@ -577,15 +605,17 @@
     ctx.fillRect(0, 0, W, H);
   }
 
-  function drawStripAt(ctx, strip, cellH, cellW, off, highlight) {
+  function drawStripAt(ctx, strip, cellH, cellW, off, highlight, popScale) {
     const len = strip.length;
     const startIdx = Math.floor(off / cellH) - 1;
+    const pop = popScale || 1;
     for (let i = startIdx; i < startIdx + VISIBLE + 3; i++) {
       const idx = ((i % len) + len) % len;
       const y = i * cellH - off;
       const sym = SYMBOLS[strip[idx]];
       const isCenter = highlight && Math.abs(y + cellH / 2 - cellH * 1.5) < cellH * 0.55;
-      drawMechTile(ctx, 0, y, cellW, cellH, sym, isCenter);
+      const dim = !!highlight && !isCenter;
+      drawMechTile(ctx, 0, y, cellW, cellH, sym, isCenter, dim, isCenter ? pop : 1);
     }
   }
 
@@ -616,10 +646,10 @@
     saveBalance();
     updateMeters();
     stopAttract();
-    els.cabinet.classList.remove("attract", "winning");
+    els.cabinet.classList.remove("attract", "winning", "big-win", "small-win");
     els.cabinet.classList.add("spinning");
     document.querySelectorAll(".reel-drum").forEach((f) => {
-      f.classList.remove("winner", "win-pulse");
+      f.classList.remove("winner", "win-pulse", "win-pulse-big");
     });
     setMessage("SPINNING…", "spinning");
     setMarquee("GOOD LUCK", "cyan");
@@ -730,40 +760,36 @@
     if (a === b && b === c) {
       const sym = SYMBOLS[a];
       const payout = bet * sym.mult;
-      lastWin = payout;
+      // ×25+ / sevens / diamond get jackpot treatment
+      const isBig = sym.mult >= 25 || sym.id === "seven" || sym.id === "diamond";
+
+      // Keep WIN meter at 0 until count-up — never snap to payout
+      lastWin = 0;
+      els.lastWin.textContent = formatLed(0);
+
       els.cabinet.classList.add("winning");
+      els.cabinet.classList.toggle("big-win", isBig);
+      els.cabinet.classList.toggle("small-win", !isBig);
       document.querySelectorAll(".reel-drum").forEach((f) => {
         f.classList.add("winner", "win-pulse");
+        f.classList.toggle("win-pulse-big", isBig);
       });
-      results.forEach((_, i) => drawReel(i, true));
 
-      setMarquee("★ WINNER ★", "win");
-      setMessage(`THREE ${sym.name.toUpperCase()}!`, "win");
-
-      const isBig = sym.mult >= 25;
-      if (isBig) playSfx("bigwin");
-      else playSfx("win");
-
-      // Stronger coin flick toward WIN LED (small wins still juicy)
-      burstTowardWinMeter(isBig ? 80 : 56, sym.color);
-      showWinToast(payout, sym, isBig);
-
-      // Credit count-up on WIN meter + CREDITS meter
-      const balBefore = balance;
-      countUpWin(payout, balBefore, () => {
-        balance = balBefore + payout;
-        saveBalance();
-        updateMeters();
-        spinning = false;
-        updateMeters();
-        setTimeout(() => {
-          els.cabinet.classList.remove("winning");
-          document.querySelectorAll(".reel-drum").forEach((f) => {
-            f.classList.remove("winner", "win-pulse");
-          });
-          startAttract();
-        }, 1600);
-      });
+      // Phase 1: harder center-line pulse/scale ~0.4s BEFORE banner
+      const popStart = performance.now();
+      const amp = isBig ? 0.2 : 0.13;
+      function popTick(now) {
+        const t = Math.min(1, (now - popStart) / WIN_POP_MS);
+        const pop = 1 + Math.sin(t * Math.PI) * amp;
+        results.forEach((_, i) => drawReel(i, true, pop));
+        if (t < 1) {
+          requestAnimationFrame(popTick);
+        } else {
+          results.forEach((_, i) => drawReel(i, true, 1.05));
+          revealWinPay(payout, sym, isBig);
+        }
+      }
+      requestAnimationFrame(popTick);
     } else {
       playSfx("lose");
       setMarquee("TRY AGAIN", "");
@@ -776,15 +802,54 @@
     }
   }
 
+  function revealWinPay(payout, sym, isBig) {
+    setMarquee(isBig ? "★ JACKPOT ★" : "★ WINNER ★", "win");
+    setMessage(`THREE ${sym.name.toUpperCase()}!`, "win");
+
+    if (isBig) playSfx("bigwin");
+    else playSfx("win");
+
+    // Short capped coin/chip burst toward WIN insert
+    burstTowardWinMeter(isBig ? 36 : 20, sym.color, isBig);
+    showWinToast(payout, sym, isBig);
+
+    // Count-up 0→win on WIN + CREDITS (never snap)
+    const balBefore = balance;
+    countUpWin(payout, balBefore, () => {
+      lastWin = payout;
+      balance = balBefore + payout;
+      saveBalance();
+      updateMeters();
+      spinning = false;
+      updateMeters();
+      setTimeout(() => {
+        els.cabinet.classList.remove("winning", "big-win", "small-win");
+        document.querySelectorAll(".reel-drum").forEach((f) => {
+          f.classList.remove("winner", "win-pulse", "win-pulse-big");
+        });
+        resultsHoldClear();
+        startAttract();
+      }, isBig ? 1900 : 1500);
+    });
+  }
+
+  function resultsHoldClear() {
+    reels.forEach((_, i) => drawReel(i, false));
+  }
+
   function countUpWin(total, balBefore, done) {
     const start = performance.now();
-    const dur = Math.min(1100, 480 + total * 2.2);
+    // Always animate 0→win (even tiny/fast) — never snap
+    const dur = Math.max(320, Math.min(1200, 420 + Math.log10(Math.max(2, total)) * 180));
     els.balance.classList.add("counting");
     els.lastWin.classList.add("counting");
+    els.lastWin.textContent = formatLed(0);
+    els.balance.textContent = formatLed(balBefore);
     function step(now) {
       const t = Math.min(1, (now - start) / dur);
       const eased = easeOutCubic(t);
-      const val = Math.floor(total * eased);
+      // Ensure first painted frame is 0, last is exact total
+      const val = t <= 0 ? 0 : t >= 1 ? total : Math.max(0, Math.floor(total * eased));
       els.lastWin.textContent = formatLed(val);
       els.balance.textContent = formatLed(balBefore + val);
       setMessage(`YOU WON ${formatMoney(val)} PLAY MONEY!`, "win");
@@ -810,7 +875,7 @@
     }
     toastEl.className = "win-toast" + (isBig ? " big" : "");
     toastEl.innerHTML =
-      `WIN ${formatMoney(payout)}` +
+      `${isBig ? "JACKPOT " : "WIN "}${formatMoney(payout)}` +
       `<span class="sub">${sym.emoji} ${sym.name.toUpperCase()} ×${sym.mult} · PLAY MONEY</span>`;
     // Force reflow then show
     void toastEl.offsetWidth;
@@ -840,7 +905,7 @@
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }
 
-  function burstTowardWinMeter(count, accent) {
+  function burstTowardWinMeter(count, accent, isBig) {
     const canvas = els.confetti;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = window.innerWidth * dpr;
@@ -854,26 +919,28 @@
     const to = getWinMeterOrigin();
 
     for (let i = 0; i < n; i++) {
-      const delay = Math.random() * 0.15;
+      const delay = Math.random() * (isBig ? 0.12 : 0.08);
       // Mostly fly toward WIN meter with scatter
-      const tx = to.x + (Math.random() - 0.5) * 40;
-      const ty = to.y + (Math.random() - 0.5) * 24;
+      const tx = to.x + (Math.random() - 0.5) * 36;
+      const ty = to.y + (Math.random() - 0.5) * 20;
       const dx = tx - from.x;
       const dy = ty - from.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-      const speed = 5.5 + Math.random() * 8;
+      const speed = (isBig ? 6.5 : 5.2) + Math.random() * (isBig ? 7 : 5);
+      const roll = Math.random();
+      const kind = roll > 0.55 ? "coin" : roll > 0.22 ? "chip" : "spark";
       particles.push({
-        x: from.x + (Math.random() - 0.5) * 60,
-        y: from.y + (Math.random() - 0.5) * 36,
-        vx: (dx / dist) * speed * (0.85 + Math.random() * 0.45) + (Math.random() - 0.5) * 1.6,
-        vy: (dy / dist) * speed * (0.85 + Math.random() * 0.45) - Math.random() * 1.5,
+        x: from.x + (Math.random() - 0.5) * 54,
+        y: from.y + (Math.random() - 0.5) * 30,
+        vx: (dx / dist) * speed * (0.88 + Math.random() * 0.4) + (Math.random() - 0.5) * 1.4,
+        vy: (dy / dist) * speed * (0.88 + Math.random() * 0.4) - Math.random() * 1.2,
         life: 1,
-        decay: 0.008 + Math.random() * 0.01,
+        decay: (isBig ? 0.012 : 0.016) + Math.random() * 0.012,
         color: colors[i % colors.length],
-        size: 3 + Math.random() * 5,
+        size: (kind === "chip" ? 3.5 : 2.5) + Math.random() * (isBig ? 4.5 : 3.2),
         rot: Math.random() * Math.PI,
-        vr: (Math.random() - 0.5) * 0.25,
-        kind: Math.random() > 0.35 ? "coin" : "spark",
+        vr: (Math.random() - 0.5) * 0.28,
+        kind,
         targetX: tx,
         targetY: ty,
         delay,
@@ -921,6 +988,19 @@
         ctx.beginPath();
         ctx.ellipse(0, 0, p.size, p.size * 0.65, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.35)";
+        ctx.beginPath();
+        ctx.ellipse(-p.size * 0.2, -p.size * 0.15, p.size * 0.28, p.size * 0.18, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (p.kind === "chip") {
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 5;
+        roundRect(ctx, -p.size * 0.55, -p.size * 0.22, p.size * 1.1, p.size * 0.44, p.size * 0.12);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255,255,255,0.45)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
       } else {
         ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
